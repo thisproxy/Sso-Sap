@@ -1,16 +1,15 @@
 require 'spec_helper'
-require 'ldap_store'
-require 'rails'
 
-describe LdapStore do
+
+describe SsoSap::LdapStore do
 
 	describe "self.initialize" do
 		it "should initialize a new LDAP connection" do
-			LdapStore.send(:initialize, ldap_options)
+			SsoSap::LdapStore.send(:initialize, ldap_options)
 		end
 		
 		it "should return nil when the parameters are not sufficient" do
-		  LdapStore.send(:initialize, {}).should be_nil
+		  SsoSap::LdapStore.send(:initialize, {}).should be_nil
 		end
 	  
 	end
@@ -18,11 +17,11 @@ describe LdapStore do
 	describe "self.find_user_with_credentials(uid, password)" do
 	  context "provided credentials are valid" do
 	    it "should return a user account hash" do
-				LdapStore.send(:initialize, ldap_options)
+				SsoSap::LdapStore.send(:initialize, ldap_options)
 				Net::LDAP.any_instance.stubs(:bind).returns( true )				
 				Net::LDAP.any_instance.expects(:search).yields(ldap_entry)
 				Net::LDAP.any_instance.expects(:search).yields(ldap_entry)				
-				user_hash = LdapStore.find_user_with_credentials(credentials["uid"], credentials["password"])
+				user_hash = SsoSap::LdapStore.find_user_with_credentials(credentials["uid"], credentials["password"])
 				user_hash.should be_instance_of(Hash)
 				user_hash["uid"].should == [ldap_user_hash["uid"]]
 				user_hash["name"].should == [ldap_user_hash["name"]]
@@ -32,11 +31,11 @@ describe LdapStore do
 	
 		context "provided credentials are invalid" do
 		  it "should return false" do
-		    LdapStore.send(:initialize, ldap_options)
+		    SsoSap::LdapStore.send(:initialize, ldap_options)
 				Net::LDAP.any_instance.stubs(:bind).returns( true )	
 				Net::LDAP.any_instance.stubs(:bind).returns( false )				
 				Net::LDAP.any_instance.expects(:search).yields(ldap_entry)		
-				user_hash = LdapStore.find_user_with_credentials(credentials["uid"], credentials["password"])
+				user_hash = SsoSap::LdapStore.find_user_with_credentials(credentials["uid"], credentials["password"])
 				user_hash.should == false
 		  end
 		end
@@ -44,18 +43,24 @@ describe LdapStore do
 	
 	describe "self.find_user_with_ticket" do
 	  it "should return a user account hash" do
-			LdapStore.send(:initialize, ldap_options)
+			SsoSap::LdapStore.send(:initialize, ldap_options)
 			Net::LDAP.any_instance.stubs(:search).yields( ldap_entry )
-			user_hash = LdapStore.find_user_with_ticket(credentials["uid"])
+			user_hash = SsoSap::LdapStore.find_user_with_ticket(credentials["uid"])
 			user_hash.should be_instance_of(Hash)
 			user_hash["uid"].should == [ldap_user_hash["uid"]]
 			user_hash["name"].should == [ldap_user_hash["name"]]
 	  end
+	
+		it "should return false if search was unsuccessful" do
+		  SsoSap::LdapStore.send(:initialize, ldap_options)
+			Net::LDAP.any_instance.stubs(:search).returns(false)
+			SsoSap::LdapStore.find_user_with_ticket(credentials["uid"]).should be_false
+		end
 	end
 	
 	describe "self.to_hash" do
 	  it "should map the given values into a hash" do
-	    user_hash = LdapStore.to_hash( ldap_entry )
+	    user_hash = SsoSap::LdapStore.to_hash( ldap_entry )
 			user_hash.each do |key, value|
 				user_hash[key].should == [ldap_user_hash[key]]
 			end

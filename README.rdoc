@@ -1,0 +1,143 @@
+= SSO SAP
+
+Sso_Sap provides single sign on while within the SAP network
+
+== Requirements
+
+Sso_Sap is tested with 
+
+* Ruby 1.9.2
+* Rails 3.0.6
+
+== Installation
+
+Add to your Gemfile:
+
+    gem "sso_sap", :git => "dont know yet"
+
+Make sure everything is installed with:
+
+    bundle install
+    
+    
+== Usage
+
+Sso_Sap requires a before_filter in your ApplicationController and a User class
+
+
+Create an initializer file in app/config/initializers
+Either load the options from a yml file (recommended) or insert them as a hash directly
+
+  LdapStore.initialize(ldap_options)
+  SsoSap.initialize(sso_options)
+
+
+= ldap_options
+Represents the connection to your ldap , it takes the following options:
+  host, port, method, uid, base, bind_dn, password
+
+Your yml file could look like this:
+
+  development:
+    host: "your_host"
+    port: 389
+    method: :simple
+    uid: 'account_name'
+    base: 'base_name'
+    bind_dn: 'bind_dn'
+    password: 'secret'
+
+= sso_options
+Configure which authentication options should be active
+Again, first the yml example:
+
+  development:
+    dev_mode: true
+    session: false
+    ticket: true
+
+
+    dev_mode 
+Set this to true, if you want to be automatically logged in with a fake user. Only affects the development mode in rails.
+
+
+    session
+Set this to true if you want to be able, to sign in providing credentials. If the sso with a ticket fails,
+this will be the fallback authentication
+
+    ticket
+Set this to true if you want to enable single sign on with a client-side provided certificate.
+
+
+= app/application_controller.rb
+
+* add
+    before_filter :require_login
+
+= app/models/user.rb
+
+* add   
+    def self.find_from_hash(hash)
+      User.where(:uid => hash['uid']).first
+    end
+
+    def self.create_from_hash!(hash)
+      user = User.new
+	    hash.each do |key , value| 
+	 	    user.send("#{key}=", value) if user.respond_to? ("#{key}=")
+	    end
+      user.save!
+	    user
+    end
+
+= app/controllers/sessions_controller.rb
+
+* add
+  def new
+  end
+
+  def create
+	  if user_hash = login_with_credentials(params[:uid], params[:password])
+		  unless user = User.find_from_hash(user_hash)
+			  user = User.create_from_hash!(user_hash)
+		  end
+      session[:user_id] = user.uid
+      redirect_to root_url, :notice => "Logged in!"
+    else
+      flash.now.alert = "Invalid email or password"
+      render "new"
+    end
+  end
+
+  def destroy
+	  reset_session
+    flash[:alert] = "You have been logged out"
+    redirect_to :login
+  end
+
+
+
+Create a login form in app/views/sessions/new, you only need to do this, if you've enabled the session authentication.
+
+
+    %h1 Log in
+
+    = form_tag sessions_path do
+    %p
+      = label_tag :uid
+      = text_field_tag :uid, params[:uid]
+    
+    %p
+      = label_tag :password
+      = password_field_tag :password
+
+    = submit_tag "Log in"
+
+
+== Development
+
+Development requires:
+
+* RSpec >= 2.5.0
+* Simplecov >= 0.3.6
+

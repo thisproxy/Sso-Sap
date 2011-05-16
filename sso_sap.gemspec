@@ -12,14 +12,18 @@ Gem::Specification.new do |s|
   s.summary     = %q{ Gem for SSO with the LDAP backend }
   s.description = %q{ Use this gem to handle user login while within the SAP network }
 
-	s.add_development_dependency "rspec"
+	s.add_development_dependency "rspec-rails", "~> 2.4"
 	s.add_development_dependency "mocha"
-	s.add_development_dependency "rails"		
+	s.add_development_dependency "rails"
+	s.add_development_dependency "simplecov"
+	
+	s.add_dependency "net-ldap"
 	s.add_dependency "rails"
 	s.add_dependency "rack"
+
 	
   s.files         = `git ls-files`.split("\n")
   s.test_files    = `git ls-files -- {test,spec,features}/*`.split("\n")
   s.executables   = `git ls-files -- bin/*`.split("\n").map{ |f| File.basename(f) }
-  s.require_paths = ["lib"]
+  s.require_paths = ["lib", "sso_sap"]
 end

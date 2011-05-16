@@ -1,202 +1,228 @@
 require 'spec_helper'
-require 'sso_sap'
-require 'rails'
 
-
-describe SsoSap do
+describe SsoSap::Authenticate do
 
 	describe "self.initialize(options={})" do
 		it "should initialize with the given options" do
-		  auth_hash = SsoSap.initialize(authentication_options)
-		  auth_hash[:dev_mode].should == authentication_options["dev_mode"]
-		  auth_hash[:session].should ==	authentication_options["session"]
-		  auth_hash[:ticket].should ==	authentication_options["ticket"]
+		  init_hash = SsoSap::Authenticate.initialize(auth_options)
+		  init_hash[:dev_mode].should == auth_options[:dev_mode]
+		  init_hash[:session].should ==	auth_options[:session]
+		  init_hash[:ticket].should ==	auth_options[:ticket]
 		end
 		
 		it "should fall back to default when no options are given" do
-		  auth_hash = SsoSap.initialize({})
-		  auth_hash[:dev_mode].should == false
-		  auth_hash[:session].should ==	true
-		  auth_hash[:ticket].should ==	true
+		  init_hash = SsoSap::Authenticate.initialize({})
+		  init_hash[:dev_mode].should == false
+		  init_hash[:session].should ==	true
+		  init_hash[:ticket].should ==	true
 		end
-
+	
 	end
-
-
+	
+	
 	describe "self.authentication_options" do
 	  it "should return the initialized authentication options" do
-			SsoSap.initialize(authentication_options)
-			auth_hash = SsoSap.authentication_options
-			auth_hash.should be_instance_of(Hash)
-		  auth_hash[:dev_mode].should == authentication_options["dev_mode"]
-		  auth_hash[:session].should ==	authentication_options["session"]
-		  auth_hash[:ticket].should ==	authentication_options["ticket"]
+			SsoSap::Authenticate.initialize(auth_options)
+			init_hash = SsoSap::Authenticate.auth_options
+			init_hash.should be_instance_of(Hash)
+		  init_hash[:dev_mode].should == auth_options[:dev_mode]
+		  init_hash[:session].should ==	auth_options[:session]
+		  init_hash[:ticket].should ==	auth_options[:ticket]
 	    
 	  end
 	
 	end
-
-end
-
-
-def authentication_options
-	{
-		"dev_mode" => true,
-		"session" => false,
-		"ticket" => false
-	}
-end
-
-
-describe SsoSap::InstanceMethods do
-
+	
 	before(:each) do
-	  @dummy = Class.new
-		@dummy.includes(SsoSap::InstanceMethods)
+		@dummy = FooController.new
+		@dummy.extend(SsoSap::Authenticate::InstanceMethods)
+		 
+		@dummy.session = {}
+		@dummy.flash = { :error => "", :warn => "", :info => ""  }
+		@dummy.request = Object.new
+		@fake_user = User.new(:first_name => "Ayumi", :last_name => "Hamasaki", :uid => "D1231331")
 	end
 
 	describe "current_user" do
-	  
+		
+		context "as a logged out user" do
+			it "should login with fake with an existing user" do
+				SsoSap::Authenticate.initialize({ :dev_mode => true })
+				Rails.stubs(:env).returns("development")
+				User.stubs(:find_from_hash).returns(@fake_user)
+				@dummy.expects(:login_with_session).never
+				@dummy.expects(:login_with_ticket).never
+				@dummy.current_user
+				@dummy.session[:uid].should == @fake_user.uid
+				@dummy.logged_in?.should be_true
+			end
+					
+			it "should login with session" do
+				SsoSap::Authenticate.initialize({ :session => true })
+				Rails.stubs(:env).returns("production")
+				User.stubs(:where).returns([@fake_user])
+				@dummy.expects(:login_with_fake).never
+				@dummy.expects(:login_with_ticket).never
+				@dummy.current_user
+				@dummy.session[:uid].should == @fake_user.uid
+				@dummy.logged_in?.should be_true
+			end
+			
+			it "should login with ticket for an existing user" do
+				Rails.stubs(:env).returns("production")
+				SsoSap::Authenticate.initialize({ :ticket => true, :session => false })
+				@dummy.expects(:login_with_fake).never
+				@dummy.expects(:login_with_session).never
+				@dummy.request.stubs(:env).returns({'HTTP_SSL_CLIENT_VERIFY' => 'SUCCESS', 'HTTP_SSL_CLIENT_S_DN' => "CN=#{@fake_user.uid}"})
+				User.stubs(:where).returns([@fake_user])
+				@dummy.current_user
+				@dummy.session[:uid].should == @fake_user.uid
+				@dummy.logged_in?.should be_true
+			end
+			
+			it "should login with ticket for a new user" do
+				fake_user = User.new(:uid => "D1312414", :first_name => "Alice", :last_name => "Cooper")
+					
+				Rails.stubs(:env).returns("production")
+				SsoSap::Authenticate.initialize({ :ticket => true, :session => false })
+
+				@dummy.expects(:login_with_fake).never
+				@dummy.expects(:login_with_session).never
+				@dummy.request.stubs(:env).returns({'HTTP_SSL_CLIENT_VERIFY' => 'SUCCESS', 'HTTP_SSL_CLIENT_S_DN' => "CN=#{@fake_user.uid}"})
+				User.stubs(:where).returns([])
+				User.stubs(:create_from_hash!).returns(fake_user)
+				SsoSap::LdapStore.stubs(:find_user_with_ticket).returns({:uid => "D1312414", :first_name => "Alice", :last_name => "Cooper"})
+				@dummy.current_user
+				@dummy.session[:uid].should == fake_user.uid
+				@dummy.logged_in?.should be_true
+			end
+			
+			
+			it "should return nil if everything went downhill" do
+				SsoSap::Authenticate.initialize({ :ticket => false, :session => false, :dev_mode => false })
+				@dummy.expects(:login_with_fake).never
+				@dummy.expects(:login_with_ticket).never
+				@dummy.expects(:login_with_session).never
+				@dummy.current_user.should be_nil
+			end
+		
+		end
+		
+		context "as a logged in user" do
+		  it "should return the current_user" do
+		    @dummy.current_user = @fake_user
+				@dummy.current_user.should == @fake_user
+		  end
+		end
+		
 	end
   
 	describe "logged_in?" do
-	  
+		it "should return true if a current user exists" do
+		  @dummy.stubs(:current_user).returns(@fake_user)
+			@dummy.logged_in?.should be_true
+		end
+		
+		it "should return false if the current user is nil" do
+		  @dummy.stubs(:current_user).returns(nil)
+			@dummy.logged_in?.should be_false
+		end
 	end
-
-
+	
+	
 	describe "log_in(user)" do
-	  
+	  it "should assing the current user" do
+	    @dummy.log_in(@fake_user)
+			@dummy.current_user.should == @fake_user
+	  end
 	end
 	
 	describe "require_login" do
-	  
-	end
+	  it "should redirect_to login if not logged in" do
+			pending("Refactor to actually run with an ActionController test, instead of wild stubbing")
+	    @dummy.stubs(:logged_in?).returns(false)
+	  	@dummy.require_login
+	  	response.should redirect_to :login
+	  end
 	
+		it "should return nil if already logged in" do
+	    @dummy.stubs(:logged_in?).returns(true)
+			@dummy.require_login.should == nil
+	  end
+	end
 	
 	describe "login_with_session" do
 	  
 	end
-
+	
 	describe "login_with_fake" do
-	  
-	end
-
-	describe "login_with_credentials(uid, password)" do
-	  
+	  it "should log in with an existing fake account" do
+			User.stubs(:find_from_hash).returns(@fake_user)
+			@dummy.login_with_fake
+			@dummy.current_user.should == @fake_user
+	  end
+	
+		it "should create a new account if not already existent" do
+			User.stubs(:find_from_hash).returns(nil)
+			User.stubs(:create_from_hash!).returns(@fake_user)
+			@dummy.login_with_fake
+			@dummy.current_user.should == @fake_user
+		end
 	end
 	
+	describe "login_with_credentials(uid, password)" do
+	  it "should return a hash with user information" do
+			SsoSap::LdapStore.stubs(:find_user_with_credentials).returns(fake_user)
+			@dummy.login_with_credentials("user_uid", "secret").should == fake_user	    
+	  end
+	end
+	
+	
 	describe "login_with_ticket" do
-	  
+		it "should log a user on with using a ticket" do
+		  fake_user = User.new(:uid => "D1312414", :first_name => "Alice", :last_name => "Cooper")					
+	
+			@dummy.request.stubs(:env).returns({'HTTP_SSL_CLIENT_VERIFY' => 'SUCCESS', 'HTTP_SSL_CLIENT_S_DN' => "CN=#{@fake_user.uid}"})
+			User.stubs(:where).returns([])
+			User.stubs(:create_from_hash!).returns(fake_user)
+			SsoSap::LdapStore.stubs(:find_user_with_ticket).returns({:uid => "D1312414", :first_name => "Alice", :last_name => "Cooper"})
+			@dummy.login_with_ticket
+			@dummy.session[:uid].should == fake_user.uid
+			@dummy.logged_in?.should be_true
+		end
+		
+		it "should raise an exception if creat_from_hash! failed" do
+		  fake_user = User.new(:uid => "D1312414", :first_name => "Alice", :last_name => "Cooper")						
+	
+			@dummy.request.stubs(:env).returns({'HTTP_SSL_CLIENT_VERIFY' => 'SUCCESS', 'HTTP_SSL_CLIENT_S_DN' => "CN=#{@fake_user.uid}"})
+			User.stubs(:where).returns([])
+			User.stubs(:create_from_hash!).returns(RuntimeError.new("User couldn't be created!"))
+			SsoSap::LdapStore.stubs(:find_user_with_ticket).returns({:uid => "D1312414", :first_name => "Alice", :last_name => "Cooper"})
+			@dummy.login_with_ticket.should be_false
+		end
 	end
 	
 	describe "current_user=(user)" do
-	  
+	  it "should set the current_user" do
+	    @dummy.current_user = @fake_user
+			@dummy.session[:uid].should == @fake_user.uid
+			@dummy.current_user.should == @fake_user
+	  end
 	end
-
+	
 end
 
 
+def auth_options
+	{
+		:dev_mode => true,
+		:session => false,
+		:ticket => false
+	}
+end
+
+def fake_user
+	{ :name => "Ayumi" , :uid => "D1231331", :last_name => "Hamasaki" }
+end
 
 
-
-
-# 
-# 
-# 
-# module SsoSap
-# 	
-
-
-# 	
-# 	module InstanceMethods
-# 		def current_user
-# 			authenticate_options = SsoSap.authentication_options
-# 
-# 			return @current_user unless @current_user.blank?
-# 			login_with_fake    if Rails.env.eql?("development") && authenticate_options[:dev_mode]
-# 			login_with_session if authenticate_options[:session]
-# 			login_with_ticket  if authenticate_options[:ticket]
-# 			@current_user
-# 		end
-# 
-# 		def logged_in?
-# 			!!current_user
-# 		end
-# 
-# 		def log_in(user)
-# 			self.current_user = user
-# 		end
-# 
-# 		def require_login 
-# 			unless logged_in? 
-# 				flash[:error] = "You must be logged in to access this section"
-# 				redirect_to :login
-# 			end
-# 		end
-# 
-# 		def login_with_session
-# 			Rails.logger.debug "Trying to login with session information..."
-# 			user = User.where(:uid => session[:user_id]).first
-# 			self.current_user = user unless user.nil?
-# 			Rails.logger.debug "Login via session: #{user.nil? ? "failed" : "succeeded"}"
-# 		end
-# 
-# 
-# 		def login_with_fake
-# 			Rails.logger.debug "Logging in with fake user"
-# 
-# 			user_hash = {
-# 				"uid" => "D004711",
-# 				"name" => "Peter",
-# 				"email" =>  "peter.lustig@landstreicher.de",
-# 				"first_name" => "Peter",
-# 				"last_name" => "Lustig",
-# 				"location" => "berlin",
-# 				"description" => "2sfsfddsf",
-# 				"phone" => "234234",
-# 				"department" => "inneres"    
-# 			}
-# 			self.current_user = User.find_from_hash(user_hash) || User.create_from_hash!(user_hash)
-# 		end
-# 
-# 		def login_with_credentials(uid, password)
-# 			user_hash = LdapStore.find_user_with_credentials(uid, password)
-# 		end
-# 
-# 		def login_with_ticket
-# 			Rails.logger.debug "Trying to login with SSL_CLIENT_S_DN header"
-# 			raise "Ticket Validation failed" unless request.env['HTTP_SSL_CLIENT_VERIFY'] == 'SUCCESS'
-# 			raise "Couldn't find DN header'" unless request.env['HTTP_SSL_CLIENT_S_DN']  
-# 
-# 			uid = request.env['HTTP_SSL_CLIENT_S_DN'].match('CN=(.*)')[1]
-# 			raise "Couldn't parse the DN header'" unless uid
-# 
-# 			Rails.logger.debug "Found user #{uid} in the headers. Checking if the user exists already now..."
-# 			user = User.where(:uid => uid).first
-# 
-# 			unless user
-# 				Rails.logger.info "New user. Fetching details for #{uid} from LDAP..."
-# 
-# 				user_hash = LdapStore.find_user_with_ticket(uid) 
-# 
-# 				if user_hash then
-# 					Rails.logger.info "Creating user for #{user_hash['displayname']}"
-# 					user = User.create_from_hash!(user_hash)
-# 				end
-# 			end
-# 
-# 			self.current_user = user unless user.nil? 
-# 
-# 		rescue Exception => e
-# 			Rails.logger.warn e.inspect
-# 			false
-# 		end
-# 
-# 		def current_user=(user)
-# 			Rails.logger.debug "Logging in as #{user.first_name} #{user.last_name}"
-# 			@current_user = user
-# 			session[:uid] = user.uid
-# 		end
-# 	end
-# 	
-# end
