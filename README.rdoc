@@ -28,8 +28,8 @@ Sso_Sap requires a before_filter in your ApplicationController and a User class
 Create an initializer file in app/config/initializers
 Either load the options from a yml file (recommended) or insert them as a hash directly
 
-  LdapStore.initialize(ldap_options)
-  SsoSap.initialize(sso_options)
+  SsoSap::LdapStore.initialize(ldap_options)
+  SsoSap::Authenticate.initialize(sso_options, :logger => Rails.logger)
 
 
 = ldap_options
@@ -46,6 +46,7 @@ Your yml file could look like this:
     base: 'base_name'
     bind_dn: 'bind_dn'
     password: 'secret'
+    
 
 = sso_options
 Configure which authentication options should be active
@@ -55,7 +56,9 @@ Again, first the yml example:
     dev_mode: true
     session: false
     ticket: true
-
+    user_model: "User"
+    user_create_method: "create_from_hash!"
+    user_find_method: "find_from_hash"
 
     dev_mode 
 Set this to true, if you want to be automatically logged in with a fake user. Only affects the development mode in rails.
@@ -67,6 +70,20 @@ this will be the fallback authentication
 
     ticket
 Set this to true if you want to enable single sign on with a client-side provided certificate.
+
+    user_model
+Sets the name of the Model, which is responsible for storing user data, default is "User"
+
+    user_create_method
+Sets the name for creating a new user from a given hash. This methods needs to be an instance method of
+the specified user_model. Default is "create_from_hash!"
+
+    user_find_method
+Sets the name for finding a specific user from a given hash. This methods need to be an instance method of
+the specified user_model. Default is "find_from_hash"
+
+    logger
+Sets the logger to be used. Standard is the standard output. Advised is the Rails.logger here.
 
 
 = app/application_controller.rb

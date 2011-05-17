@@ -3,6 +3,7 @@ SimpleCov.start
 
 require 'net/ldap'
 require 'action_controller'
+require 'active_record'
 require 'rails'
 require 'rspec/rails'
 require 'sso_sap'

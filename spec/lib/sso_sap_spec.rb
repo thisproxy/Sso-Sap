@@ -16,7 +16,25 @@ describe SsoSap::Authenticate do
 		  init_hash[:session].should ==	true
 		  init_hash[:ticket].should ==	true
 		end
+		
+		it "should take a user model as a string" do
+		  init_hash = SsoSap::Authenticate.initialize(auth_options)
+			init_hash[:user_model].should == "User"
+		end
 	
+	#User.where(:uid => uid).first
+	#User.find_from_hash(user_hash) || User.create_from_hash!(user_hash)
+	# find_from_hash == User.where(:uid => hash['uid']).first
+	
+		it "should take a create from hash method" do
+		  init_hash = SsoSap::Authenticate.initialize(auth_options)
+			init_hash[:user_create_method].should == "create_from_hash!"
+		end
+		
+		it "should take a find from hash method" do
+		  init_hash = SsoSap::Authenticate.initialize(auth_options)
+			init_hash[:user_find_method].should == "find_from_hash"
+		end
 	end
 	
 	
@@ -217,7 +235,9 @@ def auth_options
 	{
 		:dev_mode => true,
 		:session => false,
-		:ticket => false
+		:ticket => false,
+		:user_model => "User",
+		:user_create_method => "create_from_hash!"
 	}
 end
 

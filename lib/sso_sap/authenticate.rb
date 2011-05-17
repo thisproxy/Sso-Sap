@@ -8,6 +8,9 @@ module SsoSap
 				:dev_mode => false,
 				:session => true,
 				:ticket => true,
+				:user_model => "User",
+				:user_create_method => "create_from_hash!",
+				:user_find_method => "find_from_hash",
 				:logger => logger
 			}.update(options)
 		end
@@ -66,7 +69,8 @@ module SsoSap
 					"phone" => "234234",
 					"department" => "inneres"    
 				}
-				self.current_user = User.find_from_hash(user_hash) || User.create_from_hash!(user_hash)
+				#self.current_user = User.find_from_hash(user_hash) || User.create_from_hash!(user_hash)
+				self.current_user =  eval(auth_options[:user_model]).send(auth_options[:user_find_method], user_hash) || eval(auth_options[:user_model]).send(auth_options[:user_create_method], user_hash)
 			end
 
 			def login_with_credentials(uid, password)

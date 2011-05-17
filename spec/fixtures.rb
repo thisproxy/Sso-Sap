@@ -6,6 +6,7 @@ class User
 		@last_name = attributes[:last_name]
 		@uid = attributes[:uid]
 	end
+	
 end
 
 
