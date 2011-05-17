@@ -1,6 +1,7 @@
 module SsoSap
 	class LdapStore
 
+		# Initialize the LDAP connection
 		def self.initialize(ldap_options = {})
 			@ldap = Net::LDAP.new :host => ldap_options["host"],
 			:port => ldap_options["port"],
@@ -13,6 +14,10 @@ module SsoSap
 			@uid_key = ldap_options["uid"]
 		end
 
+		# Takes a user's uid and a user password
+		# After successful retrieving the dn, tries to authenticate the user with
+		# a given password and retrieved dn entry
+		# If successful returns a user attribute hash, otherwise false
 		def self.find_user_with_credentials(uid, password)
 			filter = Net::LDAP::Filter.eq(@uid_key, uid)
 
@@ -35,6 +40,9 @@ module SsoSap
 			false
 		end
 
+		# Takes a user's uid
+		# Finds a user with a valid certificate with the help of the uid
+		# If successful returns a user attribute hash, otherwise false
 		def self.find_user_with_ticket(uid)
 			filter = Net::LDAP::Filter.eq(@uid_key, uid)		
 		
@@ -46,7 +54,11 @@ module SsoSap
 
 		private
 
+		# assigns the returned ldap values to a predefined hash
+		# Net::LDAP::Entry returns values as an array, so we have
+		# to convert to a string first.
 		def self.to_hash(entry)
+    	Hash[*
 			{
 				'uid'     	  => entry[:cn],
 				'name'        => entry[:displayname],
@@ -59,7 +71,7 @@ module SsoSap
 				'company'			=> entry[:company],
 				'zip_code'		=> entry[:postalcode],
 				'email'				=> entry[:mail]
-			}
+			}.map{|k,v| [k,v.to_a.first]}.flatten]
 		end	
 
 	end

@@ -23,8 +23,8 @@ describe SsoSap::LdapStore do
 				Net::LDAP.any_instance.expects(:search).yields(ldap_entry)				
 				user_hash = SsoSap::LdapStore.find_user_with_credentials(credentials["uid"], credentials["password"])
 				user_hash.should be_instance_of(Hash)
-				user_hash["uid"].should == [ldap_user_hash["uid"]]
-				user_hash["name"].should == [ldap_user_hash["name"]]
+				user_hash["uid"].should == ldap_user_hash["uid"]
+				user_hash["name"].should == ldap_user_hash["name"]
 				
 		  end
 	  end
@@ -47,8 +47,8 @@ describe SsoSap::LdapStore do
 			Net::LDAP.any_instance.stubs(:search).yields( ldap_entry )
 			user_hash = SsoSap::LdapStore.find_user_with_ticket(credentials["uid"])
 			user_hash.should be_instance_of(Hash)
-			user_hash["uid"].should == [ldap_user_hash["uid"]]
-			user_hash["name"].should == [ldap_user_hash["name"]]
+			user_hash["uid"].should == ldap_user_hash["uid"]
+			user_hash["name"].should == ldap_user_hash["name"]
 	  end
 	
 		it "should return false if search was unsuccessful" do
@@ -62,7 +62,7 @@ describe SsoSap::LdapStore do
 	  it "should map the given values into a hash" do
 	    user_hash = SsoSap::LdapStore.to_hash( ldap_entry )
 			user_hash.each do |key, value|
-				user_hash[key].should == [ldap_user_hash[key]]
+				user_hash[key].should == ldap_user_hash[key]
 			end
 	  end
 	end
